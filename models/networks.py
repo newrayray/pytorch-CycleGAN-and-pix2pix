@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+from torch.nn import functional as F
 
 
 ###############################################################################
@@ -155,6 +156,14 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'unet_512':
+        net = UnetGenerator(input_nc, output_nc, 9, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'u2net':
+        net = U2netGenerator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_full':
+        net = U2netFullGenerator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite':
+        net = U2netLiteGenerator(input_nc, output_nc, norm_layer=norm_layer)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -614,3 +623,263 @@ class PixelDiscriminator(nn.Module):
     def forward(self, input):
         """Standard forward."""
         return self.net(input)
+
+class U2netGenerator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netGenerator, self).__init__()
+        self.model = u2net_full(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+class U2netFullGenerator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netFullGenerator, self).__init__()
+        self.model = u2net_full(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+class U2netLiteGenerator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netLiteGenerator, self).__init__()
+        self.model = u2net_lite(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+class ConvBNReLU(nn.Module):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+        padding = kernel_size // 2 if dilation == 1 else dilation
+        self.conv = nn.Conv2d(input_nc, output_nc, kernel_size, padding=padding, dilation=dilation, bias=use_bias)
+        self.bn = nn.BatchNorm2d(output_nc)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.relu(self.bn(self.conv(x)))
+
+
+class DownConvBNReLU(ConvBNReLU):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True, norm_layer=nn.BatchNorm2d):
+        super().__init__(input_nc, output_nc, kernel_size, dilation, norm_layer=norm_layer)
+        self.down_flag = flag
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.down_flag:
+            x = F.max_pool2d(x, kernel_size=2, stride=2, ceil_mode=True)
+
+        return self.relu(self.bn(self.conv(x)))
+
+
+class UpConvBNReLU(ConvBNReLU):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True, norm_layer=nn.BatchNorm2d):
+        super().__init__(input_nc, output_nc, kernel_size, dilation, norm_layer=norm_layer)
+        self.up_flag = flag
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        if self.up_flag:
+            x1 = F.interpolate(x1, size=x2.shape[2:], mode='bilinear', align_corners=False)
+        return self.relu(self.bn(self.conv(torch.cat([x1, x2], dim=1))))
+
+
+class RSU(nn.Module):
+    def __init__(self, height: int, input_nc: int, mid_ch: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+
+        assert height >= 2
+        self.conv_in = ConvBNReLU(input_nc, output_nc)
+
+        encode_list = [DownConvBNReLU(output_nc, mid_ch, flag=False, norm_layer=norm_layer)]
+        decode_list = [UpConvBNReLU(mid_ch * 2, mid_ch, flag=False, norm_layer=norm_layer)]
+        for i in range(height - 2):
+            encode_list.append(DownConvBNReLU(mid_ch, mid_ch, norm_layer=norm_layer))
+            decode_list.append(UpConvBNReLU(mid_ch * 2, mid_ch if i < height - 3 else output_nc, norm_layer=norm_layer))
+
+        encode_list.append(ConvBNReLU(mid_ch, mid_ch, dilation=2, norm_layer=norm_layer))
+        self.encode_modules = nn.ModuleList(encode_list)
+        self.decode_modules = nn.ModuleList(decode_list)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_in = self.conv_in(x)
+
+        x = x_in
+        encode_outputs = []
+        for m in self.encode_modules:
+            x = m(x)
+            encode_outputs.append(x)
+
+        x = encode_outputs.pop()
+        for m in self.decode_modules:
+            x2 = encode_outputs.pop()
+            x = m(x, x2)
+
+        return x + x_in
+
+class RSU4F(nn.Module):
+    def __init__(self, input_nc: int, mid_ch: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        self.conv_in = ConvBNReLU(input_nc, output_nc, norm_layer=norm_layer)
+        self.encode_modules = nn.ModuleList([ConvBNReLU(output_nc, mid_ch, norm_layer=norm_layer),
+                                             ConvBNReLU(mid_ch, mid_ch, dilation=2, norm_layer=norm_layer),
+                                             ConvBNReLU(mid_ch, mid_ch, dilation=4, norm_layer=norm_layer),
+                                             ConvBNReLU(mid_ch, mid_ch, dilation=8, norm_layer=norm_layer)])
+
+        self.decode_modules = nn.ModuleList([ConvBNReLU(mid_ch * 2, mid_ch, dilation=4, norm_layer=norm_layer),
+                                             ConvBNReLU(mid_ch * 2, mid_ch, dilation=2, norm_layer=norm_layer),
+                                             ConvBNReLU(mid_ch * 2, output_nc, norm_layer=norm_layer)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_in = self.conv_in(x)
+
+        x = x_in
+        encode_outputs = []
+        for m in self.encode_modules:
+            x = m(x)
+            encode_outputs.append(x)
+
+        x = encode_outputs.pop()
+        for m in self.decode_modules:
+            x2 = encode_outputs.pop()
+            x = m(torch.cat([x, x2], dim=1))
+
+        return x + x_in
+
+class U2Net(nn.Module):
+    def __init__(self, cfg: dict, output_nc: int, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        assert "encode" in cfg
+        assert "decode" in cfg
+        self.encode_num = len(cfg["encode"])
+
+        encode_list = []
+        side_list = []
+        for c in cfg["encode"]:
+            # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
+            assert len(c) == 6
+            encode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+
+            if c[5] is True:
+                side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
+        self.encode_modules = nn.ModuleList(encode_list)
+
+        decode_list = []
+        for c in cfg["decode"]:
+            # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
+            assert len(c) == 6
+            decode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+
+            if c[5] is True:
+                side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
+        self.decode_modules = nn.ModuleList(decode_list)
+        self.side_modules = nn.ModuleList(side_list)
+        self.out_conv = nn.Conv2d(self.encode_num * output_nc, output_nc, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _, _, h, w = x.shape
+
+        # collect encode outputs
+        encode_outputs = []
+        for i, m in enumerate(self.encode_modules):
+            x = m(x)
+            encode_outputs.append(x)
+            if i != self.encode_num - 1:
+                x = F.max_pool2d(x, kernel_size=2, stride=2, ceil_mode=True)
+
+        # collect decode outputs
+        x = encode_outputs.pop()
+        decode_outputs = [x]
+        for m in self.decode_modules:
+            x2 = encode_outputs.pop()
+            x = F.interpolate(x, size=x2.shape[2:], mode='bilinear', align_corners=False)
+            x = m(torch.cat([x, x2], dim=1))
+            decode_outputs.insert(0, x)
+
+        # collect side outputs
+        side_outputs = []
+        for m in self.side_modules:
+            x = decode_outputs.pop()
+            x = F.interpolate(m(x), size=[h, w], mode='bilinear', align_corners=False)
+            side_outputs.insert(0, x)
+
+        x = self.out_conv(torch.cat(side_outputs, dim=1))
+
+        # if self.training:
+        #     # do not use torch.sigmoid for amp safe
+        #     return [x] + side_outputs
+        # else:
+        #     return torch.sigmoid(x)
+        tanh = nn.Tanh()
+        return tanh(x)
+
+
+def u2net_full(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [[7, input_nc, 32, 64, False, False],      # En1
+                   [6, 64, 32, 128, False, False],    # En2
+                   [5, 128, 64, 256, False, False],   # En3
+                   [4, 256, 128, 512, False, False],  # En4
+                   [4, 512, 256, 512, True, False],   # En5
+                   [4, 512, 256, 512, True, True]],   # En6
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 1024, 256, 512, True, True],   # De5
+                   [4, 1024, 128, 256, False, True],  # De4
+                   [5, 512, 64, 128, False, True],    # De3
+                   [6, 256, 32, 64, False, True],     # De2
+                   [7, 128, 16, 64, False, True]]     # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
+
+
+def u2net_lite(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [[7, input_nc, 16, 64, False, False],  # En1
+                   [6, 64, 16, 64, False, False],  # En2
+                   [5, 64, 16, 64, False, False],  # En3
+                   [4, 64, 16, 64, False, False],  # En4
+                   [4, 64, 16, 64, True, False],  # En5
+                   [4, 64, 16, 64, True, True]],  # En6
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 128, 16, 64, True, True],  # De5
+                   [4, 128, 16, 64, False, True],  # De4
+                   [5, 128, 16, 64, False, True],  # De3
+                   [6, 128, 16, 64, False, True],  # De2
+                   [7, 128, 16, 64, False, True]]  # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
