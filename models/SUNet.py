@@ -3,25 +3,26 @@ from models.SUNet_detail import SUNet
 
 
 class SUNet_model(nn.Module):
-    def __init__(self, config):
+    def __init__(self, img_size=256, embed_dim=96, depth=[8, 8, 8, 8], num_heads=[8, 8, 8, 8], window_size=8,
+                mlp_ratio=4., qk_scale=8):
         super(SUNet_model, self).__init__()
-        self.config = config
-        self.swin_unet = SUNet(img_size=config['SWINUNET']['IMG_SIZE'],
-                               patch_size=config['SWINUNET']['PATCH_SIZE'],
+        # self.config = config
+        self.swin_unet = SUNet(img_size=img_size,
+                               patch_size=4,
                                in_chans=3,
                                out_chans=3,
-                               embed_dim=config['SWINUNET']['EMB_DIM'],
-                               depths=config['SWINUNET']['DEPTH_EN'],
-                               num_heads=config['SWINUNET']['HEAD_NUM'],
-                               window_size=config['SWINUNET']['WIN_SIZE'],
-                               mlp_ratio=config['SWINUNET']['MLP_RATIO'],
-                               qkv_bias=config['SWINUNET']['QKV_BIAS'],
-                               qk_scale=config['SWINUNET']['QK_SCALE'],
-                               drop_rate=config['SWINUNET']['DROP_RATE'],
-                               drop_path_rate=config['SWINUNET']['DROP_PATH_RATE'],
-                               ape=config['SWINUNET']['APE'],
-                               patch_norm=config['SWINUNET']['PATCH_NORM'],
-                               use_checkpoint=config['SWINUNET']['USE_CHECKPOINTS'])
+                               embed_dim=embed_dim,
+                               depths=depth,
+                               num_heads=num_heads,
+                               window_size=window_size,
+                               mlp_ratio=mlp_ratio,
+                               qkv_bias=True,
+                               qk_scale=qk_scale,
+                               drop_rate=0.,
+                               drop_path_rate=0.1,
+                               ape=False,
+                               patch_norm=True,
+                               use_checkpoint=False)
 
     def forward(self, x):
         if x.size()[1] == 1:
