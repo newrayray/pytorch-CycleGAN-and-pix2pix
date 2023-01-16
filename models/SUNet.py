@@ -10,7 +10,7 @@ class SUNet_model(nn.Module):
         self.swin_unet = SUNet(img_size=img_size,
                                patch_size=4,
                                in_chans=3,
-                               out_chans=3,
+                               out_chans=1,
                                embed_dim=embed_dim,
                                depths=depth,
                                num_heads=num_heads,

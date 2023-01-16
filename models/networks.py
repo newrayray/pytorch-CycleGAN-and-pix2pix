@@ -174,6 +174,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = ViT_seg(img_size=512, embed_dim=1024, depth=24, num_heads=16, num_classes=3, mlp_ratio=4.)
     elif netG == 'sunet':
         net = SUNet_model(img_size=256)
+    elif netG == 'sunet512':
+        net = SUNet_model(img_size=512)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
