@@ -46,3 +46,6 @@ test/data/legacy_serialized.pt
 wandb/
 
 *.out
+
+tests/
+fakes/
