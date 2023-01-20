@@ -4,7 +4,7 @@ from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
 from torch.nn import functional as F
-
+from models.cbam import CBAM
 
 ###############################################################################
 # Helper Functions
@@ -786,10 +786,12 @@ class U2Net(nn.Module):
 
         encode_list = []
         side_list = []
+        cbam_list = []
         for c in cfg["encode"]:
             # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
             assert len(c) == 6
             encode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+            cbam_list.append(CBAM(c[3]))
 
             if c[5] is True:
                 side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
@@ -805,6 +807,7 @@ class U2Net(nn.Module):
                 side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
         self.decode_modules = nn.ModuleList(decode_list)
         self.side_modules = nn.ModuleList(side_list)
+        self.cbam_list = nn.ModuleList(cbam_list)
         self.out_conv = nn.Conv2d(self.encode_num * output_nc, output_nc, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -814,6 +817,7 @@ class U2Net(nn.Module):
         encode_outputs = []
         for i, m in enumerate(self.encode_modules):
             x = m(x)
+            x = self.cbam_list[i](x) + x
             encode_outputs.append(x)
             if i != self.encode_num - 1:
                 x = F.max_pool2d(x, kernel_size=2, stride=2, ceil_mode=True)
