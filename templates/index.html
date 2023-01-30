@@ -23,6 +23,11 @@
 	<div>
 		<img src="{{ url_for('display_image', filename=filename) }}">
 	</div>
+{% else %}
+	<div>
+		<p>example</p>
+		<img src="https://pkuss.oss-cn-beijing.aliyuncs.com/hwseg/results/2023-01-1801-37-121668676690.6115255.jpg">
+	</div>
 {% endif %}
 
 	{% with messages = get_flashed_messages() %}
@@ -35,9 +40,5 @@
 	  {% endif %}
 	{% endwith %}
 
-<div>
-	<p>example</p>
-	<img src="https://pkuss.oss-cn-beijing.aliyuncs.com/hwseg/results/2023-01-1801-37-121668676690.6115255.jpg">
-</div>
 </body>
 </html>
