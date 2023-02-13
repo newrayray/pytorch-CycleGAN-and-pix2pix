@@ -37,30 +37,34 @@ def main():
 
 @app.route("/", methods=["POST"])
 def upload():
-    if 'f' not in request.files:
-        flash('No file part')
-        return redirect(request.url)
+    # if 'f' not in request.files:
+    #     flash('No file part')
+    #     return redirect(request.url)
 
-    file = request.files["f"]
-    if file.filename == '':
-        flash('No image selected for uploading')
-        return redirect(request.url)
+    images = []
+    files = request.files.getlist("f")
+    for file in files:
+        if file.filename == '':
+            flash('No image selected for uploading')
+            return redirect(request.url)
+        print(file.filename)
+        if file and allowed_file(file.filename):
+            filename = time.strftime("%Y-%m-%d%H-%M-%S", time.localtime(time.time())) + secure_filename(file.filename)
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(upload_path)
+            # print('upload_image filename: ' + filename)
+            bucket.put_object_from_file('hwseg/' + filename, upload_path)
+            flash('Image successfully uploaded, wait a second...')
 
-    if file and allowed_file(file.filename):
-        filename = time.strftime("%Y-%m-%d%H-%M-%S", time.localtime(time.time())) + secure_filename(file.filename)
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(upload_path)
-        # print('upload_image filename: ' + filename)
-        bucket.put_object_from_file('hwseg/' + filename, upload_path)
-        flash('Image successfully uploaded, wait a second...')
-
-        result_filename = validate(upload_path, filename)
-        session['_flashes'].clear()
-        flash('finish!')
-        return render_template('index.html', filename=result_filename)
-    else:
-        flash('Allowed image types are -> png, jpg, jpeg, gif')
-        return redirect(request.url)
+            result_filename = validate(upload_path, filename)
+            session['_flashes'].clear()
+            flash('finish!')
+            images.append(result_filename)
+            # return render_template('index.html', filename=result_filename)
+        else:
+            flash('Allowed image types are -> png, jpg, jpeg, gif')
+            return redirect(request.url)
+    return render_template('index.html', images=images)
 
 
 def validate(real_a_path, real_a_filename):
