@@ -32,7 +32,7 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
-
+from util import util
 try:
     import wandb
 except ImportError:
@@ -50,6 +50,9 @@ if __name__ == '__main__':
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+    mae_metric = util.MeanAbsoluteError()
+    f1_metric = util.F1Score()
+    miou_metric = util.MeanIoU()
 
     # initialize logger
     if opt.use_wandb:
@@ -74,7 +77,14 @@ if __name__ == '__main__':
         model.test()           # run inference
         visuals = model.get_current_visuals()  # get image results
         img_path = model.get_image_paths()     # get image paths
+        # 计算mIoU
+        model.get_current_mIoU()
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
+        mae_metric.update(model.fake_B, model.real_B)
+        f1_metric.update(model.fake_B, model.real_B)
+        miou_metric.update(model.fake_B, model.real_B)
+
+    print(mae_metric, f1_metric, miou_metric)
     webpage.save()  # save the HTML

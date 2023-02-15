@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 import os
+import torch.nn.functional as F
 
 
 def tensor2im(input_image, imtype=np.uint8):
@@ -101,3 +102,119 @@ def mkdir(path):
     """
     if not os.path.exists(path):
         os.makedirs(path)
+
+
+class MeanAbsoluteError(object):
+    def __init__(self):
+        self.mae_list = []
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        batch_size, c, h, w = gt.shape
+        assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
+        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
+        error_pixels = torch.sum(torch.abs(resize_pred - gt), dim=(1, 2, 3)) / (h * w)
+        self.mae_list.extend(error_pixels.tolist())
+
+    def compute(self):
+        mae = sum(self.mae_list) / len(self.mae_list)
+        return mae
+
+    def __str__(self):
+        mae = self.compute()
+        return f'MAE: {mae:.3f}'
+
+
+class F1Score(object):
+    """
+    refer: https://github.com/xuebinqin/DIS/blob/main/IS-Net/basics.py
+    """
+
+    def __init__(self, threshold: float = 0.5):
+        self.precision_cum = None
+        self.recall_cum = None
+        self.num_cum = None
+        self.threshold = threshold
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        batch_size, c, h, w = gt.shape
+        assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
+        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
+        gt_num = torch.sum(torch.gt(gt, self.threshold).float())
+
+        pp = resize_pred[torch.gt(gt, self.threshold)]  # 对应预测map中GT为前景的区域
+        nn = resize_pred[torch.le(gt, self.threshold)]  # 对应预测map中GT为背景的区域
+
+        pp_hist = torch.histc(pp, bins=255, min=0.0, max=1.0)
+        nn_hist = torch.histc(nn, bins=255, min=0.0, max=1.0)
+
+        # Sort according to the prediction probability from large to small
+        pp_hist_flip = torch.flipud(pp_hist)
+        nn_hist_flip = torch.flipud(nn_hist)
+
+        pp_hist_flip_cum = torch.cumsum(pp_hist_flip, dim=0)
+        nn_hist_flip_cum = torch.cumsum(nn_hist_flip, dim=0)
+
+        precision = pp_hist_flip_cum / (pp_hist_flip_cum + nn_hist_flip_cum + 1e-4)
+        recall = pp_hist_flip_cum / (gt_num + 1e-4)
+
+        if self.precision_cum is None:
+            self.precision_cum = torch.full_like(precision, fill_value=0.)
+
+        if self.recall_cum is None:
+            self.recall_cum = torch.full_like(recall, fill_value=0.)
+
+        if self.num_cum is None:
+            self.num_cum = torch.zeros([1], dtype=gt.dtype, device=gt.device)
+
+        self.precision_cum += precision
+        self.recall_cum += recall
+        self.num_cum += batch_size
+
+    def compute(self):
+        pre_mean = self.precision_cum / self.num_cum
+        rec_mean = self.recall_cum / self.num_cum
+        f1_mean = (1 + 0.3) * pre_mean * rec_mean / (0.3 * pre_mean + rec_mean + 1e-8)
+        max_f1 = torch.amax(f1_mean).item()
+        return max_f1
+
+    def __str__(self):
+        max_f1 = self.compute()
+        return f'maxF1: {max_f1:.3f}'
+
+class MeanIoU():
+    def __init__(self):
+        self.miou_list = []
+    
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        batch_size, c, h, w = gt.shape
+        assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
+        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
+        resize_pred = torch.argmax(resize_pred, dim=1)
+        gt = torch.argmax(gt, dim=1)
+        miou = self.compute_miou(resize_pred, gt)
+        self.miou_list.append(miou)
+    
+    def compute(self):
+        miou = sum(self.miou_list) / len(self.miou_list)
+        return miou
+    
+    def __str__(self):
+        miou = self.compute()
+        return f'MIOU: {miou:.3f}'
+    
+    def compute_miou(pred, gt):
+        pred = pred.cpu().numpy()
+        gt = gt.cpu().numpy()
+        miou = 0
+        for i in range(1, 21):
+            pred_i = (pred == i)
+            gt_i = (gt == i)
+            intersection = np.logical_and(pred_i, gt_i)
+            union = np.logical_or(pred_i, gt_i)
+            if np.sum(union) == 0:
+                iou = 1
+            else:
+                iou = np.sum(intersection) / np.sum(union)
+            miou += iou
+        miou /= 20
+        return miou
