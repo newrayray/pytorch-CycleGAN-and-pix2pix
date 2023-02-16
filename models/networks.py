@@ -300,6 +300,37 @@ class GANLoss(nn.Module):
         return loss
 
 
+class GradientLoss(nn.Module):
+    """Define a Gradient Loss function."""
+
+    def __init__(self):
+        super(GradientLoss, self).__init__()
+
+    def forward(self, input, target):
+        # Compute the gradient of the input and target images
+        input_grad_x = torch.abs(
+            F.conv2d(input,
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     padding=1))
+        input_grad_y = torch.abs(
+            F.conv2d(input,
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     padding=1))
+        target_grad_x = torch.abs(
+            F.conv2d(target,
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],  dtype=torch.float).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     padding=1))
+        target_grad_y = torch.abs(
+            F.conv2d(target,
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     padding=1))
+
+        # Compute the L1 loss between the input and target gradients
+        grad_loss = torch.mean(torch.abs(input_grad_x - target_grad_x) + torch.abs(input_grad_y - target_grad_y))
+
+        return grad_loss
+
+
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
 
