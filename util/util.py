@@ -181,6 +181,23 @@ class F1Score(object):
         max_f1 = self.compute()
         return f'maxF1: {max_f1:.3f}'
 
+
+# 计算两个torch.Tensor（pred和gt）的mIoU，tensor的shape是batch_size, c, h, w，其中batch_size为1，c为1，每个像素的值在-1到1之间，图像仅包含前景和背景，背景像素均为白色。
+def compute_miou(pred, gt):
+
+    # Flatten the tensors and convert them to 1D arrays
+    pred = pred.view(-1)
+    gt = gt.view(-1)
+
+    # Calculate the intersection and union of the predicted and ground truth masks
+    intersection = torch.sum((pred < 0) & (gt < 0)).float()
+    union = torch.sum((pred < 0) | (gt < 0)).float()
+
+    # Calculate the IoU and return it
+    iou = intersection / union
+    return iou.item()
+
+
 class MeanIoU():
     def __init__(self):
         self.miou_list = []
@@ -188,10 +205,10 @@ class MeanIoU():
     def update(self, pred: torch.Tensor, gt: torch.Tensor):
         batch_size, c, h, w = gt.shape
         assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
-        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
-        resize_pred = torch.argmax(resize_pred, dim=1)
-        gt = torch.argmax(gt, dim=1)
-        miou = self.compute_miou(resize_pred, gt)
+        # resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
+        # resize_pred = torch.argmax(resize_pred, dim=1)
+        # gt = torch.argmax(gt, dim=1)
+        miou = compute_miou(pred, gt)
         self.miou_list.append(miou)
     
     def compute(self):
@@ -201,20 +218,3 @@ class MeanIoU():
     def __str__(self):
         miou = self.compute()
         return f'MIOU: {miou:.3f}'
-    
-    def compute_miou(pred, gt):
-        pred = pred.cpu().numpy()
-        gt = gt.cpu().numpy()
-        miou = 0
-        for i in range(1, 21):
-            pred_i = (pred == i)
-            gt_i = (gt == i)
-            intersection = np.logical_and(pred_i, gt_i)
-            union = np.logical_or(pred_i, gt_i)
-            if np.sum(union) == 0:
-                iou = 1
-            else:
-                iou = np.sum(intersection) / np.sum(union)
-            miou += iou
-        miou /= 20
-        return miou
