@@ -303,26 +303,29 @@ class GANLoss(nn.Module):
 class GradientLoss(nn.Module):
     """Define a Gradient Loss function."""
 
-    def __init__(self):
+    def __init__(self, device):
         super(GradientLoss, self).__init__()
+        self.device = device
+        # self.kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1)
+        # self.kernel_y = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1)
 
     def forward(self, input, target):
         # Compute the gradient of the input and target images
         input_grad_x = torch.abs(
             F.conv2d(input,
-                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
                      padding=1))
         input_grad_y = torch.abs(
             F.conv2d(input,
-                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
                      padding=1))
         target_grad_x = torch.abs(
             F.conv2d(target,
-                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],  dtype=torch.float).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
                      padding=1))
         target_grad_y = torch.abs(
             F.conv2d(target,
-                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
                      padding=1))
 
         # Compute the L1 loss between the input and target gradients

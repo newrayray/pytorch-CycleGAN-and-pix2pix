@@ -65,7 +65,7 @@ class l2GradModel(BaseModel):
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
             self.criterionL2 = torch.nn.MSELoss()
             # 图像梯度损失
-            self.criterionGrad = networks.GradientLoss()
+            self.criterionGrad = networks.GradientLoss(self.device)
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -111,9 +111,9 @@ class l2GradModel(BaseModel):
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
         self.loss_G_L2 = self.criterionL2(self.fake_B, self.real_B) * self.opt.lambda_L1
-        self.loss_G_Grad = self.criterionGrad(self.fake_B, self.real_B) * 100
+        self.loss_G_grad = self.criterionGrad(self.fake_B, self.real_B) * 100
         # combine loss and calculate gradients
-        self.loss_G = self.loss_G_GAN + self.loss_G_L2 + self.loss_G_Grad
+        self.loss_G = self.loss_G_GAN + self.loss_G_L2 + self.loss_G_grad
         self.loss_G.backward()
 
     def optimize_parameters(self):
