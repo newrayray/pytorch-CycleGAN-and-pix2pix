@@ -20,9 +20,11 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 """
 import time
 from options.train_options import TrainOptions
+from options.test_options import FakeTestOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
+from util import util
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
@@ -30,11 +32,17 @@ if __name__ == '__main__':
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
 
+    # 加载测试集
+    test_opt = FakeTestOptions(opt)
+    dataset_test = create_dataset(test_opt.opt)
+    dataset_test_size = len(dataset_test)
+    print('The number of testing images = %d' % dataset_test_size)
+
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
-
+    best_iou = 0                   # best iou so far
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
@@ -67,7 +75,21 @@ if __name__ == '__main__':
                 print('saving the latest model (epoch %d, total_iters %d)' % (epoch, total_iters))
                 save_suffix = 'iter_%d' % total_iters if opt.save_by_iter else 'latest'
                 model.save_networks(save_suffix)
-
+            
+            if total_iters % opt.save_best_freq == 0:
+                # 保存最好的模型
+                miou_metric = util.MeanIoU()
+                # 对测试集进行测试,计算iou
+                for j, data_test in enumerate(dataset_test):
+                    model.set_input(data_test)
+                    model.test()
+                    miou_metric.update(model.fake_B, model.real_B)
+                if miou_metric.compute() > best_iou:
+                    best_iou = miou_metric.compute()
+                    print('saving the best model (epoch %d, total_iters %d)' % (epoch, total_iters))
+                    model.save_networks('best')
+                    print('best iou: %f' % best_iou)
+                print('current iou: %f' % miou_metric.compute())
             iter_data_time = time.time()
         if epoch % opt.save_epoch_freq == 0:              # cache our model every <save_epoch_freq> epochs
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))

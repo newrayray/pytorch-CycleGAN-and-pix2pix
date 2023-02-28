@@ -1,4 +1,5 @@
 from .base_options import BaseOptions
+import copy
 
 
 class TestOptions(BaseOptions):
@@ -21,3 +22,22 @@ class TestOptions(BaseOptions):
         parser.set_defaults(load_size=parser.get_default('crop_size'))
         self.isTrain = False
         return parser
+
+class FakeTestOptions():
+    def __init__(self, opt):
+        # 深拷贝opt
+        self.opt = copy.deepcopy(opt)
+        # hard-code some parameters for test
+        self.opt.num_threads = 1   # test code only supports num_threads = 1
+        self.opt.batch_size = 1    # test code only supports batch_size = 1
+        self.opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
+        self.opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
+        self.opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
+        self.opt.isTrain = False
+        self.opt.dataset_mode = 'unaligned'
+        self.opt.dataroot = '/home/ubuntu/merge/test_set'
+        self.opt.phase = 'test'
+        self.opt.direction = 'AtoB'
+        self.opt.max_dataset_size = 500
+        self.opt.input_nc = 3
+        self.opt.output_nc = 1

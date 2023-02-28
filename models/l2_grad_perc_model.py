@@ -3,7 +3,7 @@ from .base_model import BaseModel
 from . import networks
 
 
-class l2GradModel(BaseModel):
+class l2GradPercModel(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
 
     The model training requires '--dataset_mode aligned' dataset.
@@ -34,6 +34,7 @@ class l2GradModel(BaseModel):
             parser.set_defaults(pool_size=0, gan_mode='vanilla')
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
             parser.add_argument('--lambda_grad', type=float, default=50.0, help='weight for grad loss')
+            parser.add_argument('--lambda_perc', type=float, default=25.0, help='weight for perceptual loss')
 
         return parser
 
@@ -45,7 +46,7 @@ class l2GradModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['G_GAN', 'D', 'G_L2', 'G_grad', 'D_real', 'D_fake']
+        self.loss_names = ['G_GAN', 'D', 'G_L2', 'G_grad', 'G_perc', 'D_real', 'D_fake']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
@@ -67,6 +68,8 @@ class l2GradModel(BaseModel):
             self.criterionL2 = torch.nn.MSELoss()
             # 图像梯度损失
             self.criterionGrad = networks.GradientLoss(self.device)
+            # 图像感知损失
+            self.criterionPerc = networks.PerceptualLoss(self.device)
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -113,6 +116,7 @@ class l2GradModel(BaseModel):
         # Second, G(A) = B
         self.loss_G_L2 = self.criterionL2(self.fake_B, self.real_B) * self.opt.lambda_L1
         self.loss_G_grad = self.criterionGrad(self.fake_B, self.real_B) * self.opt.lambda_grad
+        self.loss_G_perc = self.criterionPerc(self.fake_B, self.real_B) * self.opt.lambda_perc
         # combine loss and calculate gradients
         self.loss_G = self.loss_G_GAN + self.loss_G_L2 + self.loss_G_grad
         self.loss_G.backward()

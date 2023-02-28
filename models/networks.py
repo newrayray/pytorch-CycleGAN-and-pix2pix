@@ -10,7 +10,8 @@ from itertools import repeat
 import collections.abc as container_abcs
 import warnings
 from models.SUNet import SUNet_model
-
+import torchvision.models as models
+from models.u2net_cbam import U2netLiteCbam2Generator
 from models.cbam import CBAM
 
 ###############################################################################
@@ -179,6 +180,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = SUNet_model(img_size=512)
     elif netG == 'u2net_lite_cbam':
         net = U2netLiteCbamGenerator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite_cbam2':
+        net = U2netLiteCbam2Generator(input_nc, output_nc, norm_layer=norm_layer)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -333,6 +336,23 @@ class GradientLoss(nn.Module):
 
         return grad_loss
 
+
+class PerceptualLoss(nn.Module):
+    """Define a Perceptual Loss function."""
+
+    def __init__(self, device):
+        super(PerceptualLoss, self).__init__()
+        self.device = device
+        self.vgg = models.vgg16(pretrained=True).features[:6]
+        self.vgg.to(device)
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+
+    def forward(self, input, target):
+        input_vgg = self.vgg(torch.cat([input, input, input], dim=1))
+        target_vgg = self.vgg(torch.cat([target, target, target], dim=1))
+        loss = torch.mean(torch.abs(input_vgg - target_vgg))
+        return loss
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
