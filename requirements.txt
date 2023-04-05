@@ -6,3 +6,6 @@ wandb
 Flask==2.2.2
 oss2==2.16.0
 Werkzeug==2.2.2
+einops
+timm
+thop
