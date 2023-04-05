@@ -15,6 +15,8 @@ import torchvision.models as models
 from models.u2net_aspp import U2netLiteAsppGenerator
 from models.u2net_cbam import U2netLiteCbam2Generator
 from models.cbam import CBAM
+from models.u2net_tiny_aspp import U2netTinyAsppGenerator
+
 
 ###############################################################################
 # Helper Functions
@@ -186,6 +188,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = U2netLiteCbam2Generator(input_nc, output_nc, norm_layer=norm_layer)
     elif netG == 'u2net_lite_aspp':
         net = U2netLiteAsppGenerator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_tiny_aspp':
+        net = U2netTinyAsppGenerator(input_nc, output_nc, norm_layer=norm_layer)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -1043,6 +1047,25 @@ def u2net_lite(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
     }
 
     return U2Net(cfg, output_nc, norm_layer)
+
+
+def u2net_tiny(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [[6, input_nc, 16, 64, False, False],  # En1
+                   [5, 64, 16, 64, False, False],  # En2
+                   [4, 64, 16, 64, False, False],  # En3
+                   [4, 64, 16, 64, True, False],  # En4
+                   [4, 64, 16, 64, True, True]],  # En5
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 128, 16, 64, True, True],  # De4
+                   [4, 128, 16, 64, False, True],  # De3
+                   [5, 128, 16, 64, False, True],  # De2
+                   [6, 128, 16, 64, False, True]],  # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
+
 
 def u2net_lite_cbam(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
     cfg = {
