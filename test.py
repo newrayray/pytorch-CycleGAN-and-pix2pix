@@ -53,6 +53,10 @@ if __name__ == '__main__':
     mae_metric = util.MeanAbsoluteError()
     f1_metric = util.F1Score()
     miou_metric = util.MeanIoU()
+    acc = util.Acc()
+    sen = util.Sensitivity()
+    rmse = util.RMSE()
+    spe = util.Specificity()
 
     # initialize logger
     if opt.use_wandb:
@@ -83,6 +87,10 @@ if __name__ == '__main__':
         mae_metric.update(model.fake_B, model.real_B)
         f1_metric.update(model.fake_B, model.real_B)
         miou_metric.update(model.fake_B, model.real_B)
+        acc.update(model.fake_B, model.real_B)
+        sen.update(model.fake_B, model.real_B)
+        rmse.update(model.fake_B, model.real_B)
+        spe.update(model.fake_B, model.real_B)
 
-    print(mae_metric, f1_metric, miou_metric)
+    print(mae_metric, f1_metric, miou_metric, acc, sen, rmse, spe)
     webpage.save()  # save the HTML

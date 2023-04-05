@@ -1,3 +1,4 @@
+import configparser
 from flask import Flask, flash, redirect, render_template, request, session
 from werkzeug.utils import secure_filename
 import oss2
@@ -10,14 +11,22 @@ from util import util
 import numpy as np
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-UPLOAD_FOLDER = 'tests/'
-RESULT_FOLDER = 'fakes/'
+UPLOAD_FOLDER = 'realA/'
+RESULT_FOLDER = 'fakeB/'
+CONCAT_FOLDER = 'concat/'
+
+# 加载配置文件config.ini，获取access_key_id，access_key_secret
+config = configparser.ConfigParser()
+config.read('config.ini')
+access_key_id = config.get('aliyun', 'access_key_id')
+access_key_secret = config.get('aliyun', 'access_key_secret')
+print(access_key_id)
+print(access_key_secret)
 # 阿里云账号AccessKey拥有所有API的访问权限，风险很高。强烈建议您创建并使用RAM用户进行API访问或日常运维，请登录RAM控制台创建RAM用户。
-auth = oss2.Auth('', '')
+auth = oss2.Auth(access_key_id, access_key_secret)
 # yourEndpoint填写Bucket所在地域对应的Endpoint。以华东1（杭州）为例，Endpoint填写为https://oss-cn-hangzhou.aliyuncs.com。
 # 填写Bucket名称。
 bucket = oss2.Bucket(auth, 'https://oss-cn-beijing.aliyuncs.com', 'pkuss')
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -81,7 +90,9 @@ def validate(real_a_path, real_a_filename):
         visuals = model.get_current_visuals()  # get image results(realA,fakeB,realB)
         im = util.tensor2im(visuals['fake_B'])
         im2 = util.tensor2im(visuals['real_A'])
-        save_path = os.path.join(app.config['RESULT_FOLDER'], fake_b_filename)
+        save_path = os.path.join(RESULT_FOLDER, fake_b_filename)
+        util.save_image(im, save_path, aspect_ratio=1.0)
+        save_path = os.path.join(CONCAT_FOLDER, fake_b_filename)
         util.save_image(np.concatenate((im2, im), axis=1), save_path, aspect_ratio=1.0)
         bucket.put_object_from_file('hwseg/results/' + fake_b_filename, save_path)
     return fake_b_filename
@@ -95,6 +106,14 @@ def display_image(filename):
 
 
 if __name__ == "__main__":
+    # 如果没有创建文件夹，创建文件夹
+    if not os.path.exists('realA'):
+        os.makedirs('realA')
+    if not os.path.exists('fakeB'):
+        os.makedirs('fakeB')
+    if not os.path.exists('concat'):
+        os.makedirs('concat')
+
     opt = TestOptions().parse()  # get test options
     # hard-code some parameters for test
     opt.num_threads = 0  # test code only supports num_threads = 0

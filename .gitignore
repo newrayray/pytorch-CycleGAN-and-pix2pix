@@ -49,3 +49,7 @@ wandb/
 
 tests/
 fakes/
+realA/
+fakeB/
+concat/
+config.ini

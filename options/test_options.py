@@ -35,7 +35,8 @@ class FakeTestOptions():
         self.opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
         self.opt.isTrain = False
         self.opt.dataset_mode = 'unaligned'
-        self.opt.dataroot = '/home/ubuntu/merge/test_set'
+        # self.opt.dataroot = '/home/ubuntu/merge/test_set'
+        self.opt.dataroot = 'E:/PythonProjects/test-image-gen/test_set'
         self.opt.phase = 'test'
         self.opt.direction = 'AtoB'
         self.opt.max_dataset_size = 500

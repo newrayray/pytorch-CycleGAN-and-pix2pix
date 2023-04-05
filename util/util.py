@@ -1,6 +1,7 @@
 """This module contains simple helper functions """
 from __future__ import print_function
 import torch
+import torch.nn as nn
 import numpy as np
 from PIL import Image
 import os
@@ -121,7 +122,7 @@ class MeanAbsoluteError(object):
 
     def __str__(self):
         mae = self.compute()
-        return f'MAE: {mae:.3f}'
+        return f'MAE: {mae:.5f}'
 
 
 class F1Score(object):
@@ -129,62 +130,37 @@ class F1Score(object):
     refer: https://github.com/xuebinqin/DIS/blob/main/IS-Net/basics.py
     """
 
-    def __init__(self, threshold: float = 0.5):
-        self.precision_cum = None
-        self.recall_cum = None
-        self.num_cum = None
-        self.threshold = threshold
+    def __init__(self, threshold: float = 0.0):
+        # 初始化四个计数器
+        self.tp = 0  # 真正例
+        self.fp = 0  # 假正例
+        self.fn = 0  # 假反例
+        self.tn = 0  # 真反例
 
     def update(self, pred: torch.Tensor, gt: torch.Tensor):
-        batch_size, c, h, w = gt.shape
-        assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
-        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
-        gt_num = torch.sum(torch.gt(gt, self.threshold).float())
-
-        pp = resize_pred[torch.gt(gt, self.threshold)]  # 对应预测map中GT为前景的区域
-        nn = resize_pred[torch.le(gt, self.threshold)]  # 对应预测map中GT为背景的区域
-
-        pp_hist = torch.histc(pp, bins=255, min=0.0, max=1.0)
-        nn_hist = torch.histc(nn, bins=255, min=0.0, max=1.0)
-
-        # Sort according to the prediction probability from large to small
-        pp_hist_flip = torch.flipud(pp_hist)
-        nn_hist_flip = torch.flipud(nn_hist)
-
-        pp_hist_flip_cum = torch.cumsum(pp_hist_flip, dim=0)
-        nn_hist_flip_cum = torch.cumsum(nn_hist_flip, dim=0)
-
-        precision = pp_hist_flip_cum / (pp_hist_flip_cum + nn_hist_flip_cum + 1e-4)
-        recall = pp_hist_flip_cum / (gt_num + 1e-4)
-
-        if self.precision_cum is None:
-            self.precision_cum = torch.full_like(precision, fill_value=0.)
-
-        if self.recall_cum is None:
-            self.recall_cum = torch.full_like(recall, fill_value=0.)
-
-        if self.num_cum is None:
-            self.num_cum = torch.zeros([1], dtype=gt.dtype, device=gt.device)
-
-        self.precision_cum += precision
-        self.recall_cum += recall
-        self.num_cum += batch_size
+        assert pred.shape == gt.shape
+        # 创建新的张量来转换为二值张量
+        pred_clone = pred.clone()
+        gt_clone = gt.clone()
+        self.tp += torch.sum((pred_clone < 0) & (gt_clone < 0)).item()
+        self.fp += torch.sum((pred_clone < 0) & (gt_clone >= 0)).item()
+        self.fn += torch.sum((pred_clone >= 0) & (gt_clone < 0)).item()
+        self.tn += torch.sum((pred_clone >= 0) & (gt_clone >= 0)).item()
 
     def compute(self):
-        pre_mean = self.precision_cum / self.num_cum
-        rec_mean = self.recall_cum / self.num_cum
-        f1_mean = (1 + 0.3) * pre_mean * rec_mean / (0.3 * pre_mean + rec_mean + 1e-8)
-        max_f1 = torch.amax(f1_mean).item()
-        return max_f1
+        # 计算f1-score，注意分母可能为零的情况
+        precision = self.tp / (self.tp + self.fp) if self.tp + self.fp > 0 else 0.0
+        recall = self.tp / (self.tp + self.fn) if self.tp + self.fn > 0 else 0.0
+        f1_score = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+        return f1_score
 
     def __str__(self):
         max_f1 = self.compute()
-        return f'maxF1: {max_f1:.3f}'
+        return f'maxF1: {max_f1:.5f}'
 
 
 # 计算两个torch.Tensor（pred和gt）的mIoU，tensor的shape是batch_size, c, h, w，其中batch_size为1，c为1，每个像素的值在-1到1之间，图像仅包含前景和背景，背景像素均为白色。
 def compute_miou(pred, gt):
-
     # Flatten the tensors and convert them to 1D arrays
     pred = pred.view(-1)
     gt = gt.view(-1)
@@ -201,7 +177,7 @@ def compute_miou(pred, gt):
 class MeanIoU():
     def __init__(self):
         self.miou_list = []
-    
+
     def update(self, pred: torch.Tensor, gt: torch.Tensor):
         batch_size, c, h, w = gt.shape
         assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
@@ -210,11 +186,106 @@ class MeanIoU():
         # gt = torch.argmax(gt, dim=1)
         miou = compute_miou(pred, gt)
         self.miou_list.append(miou)
-    
+
     def compute(self):
         miou = sum(self.miou_list) / len(self.miou_list)
         return miou
-    
+
     def __str__(self):
         miou = self.compute()
-        return f'MIOU: {miou:.3f}'
+        return f'MIOU: {miou:.6f}'
+
+
+class Acc:
+    def __init__(self):
+        self.acc_list = []
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        batch_size, c, h, w = gt.shape
+        assert batch_size == 1, f"validation mode batch_size must be 1, but got batch_size: {batch_size}."
+        resize_pred = F.interpolate(pred, (h, w), mode="bilinear", align_corners=False)
+        resize_pred = torch.argmax(resize_pred, dim=1)
+        gt = torch.argmax(gt, dim=1)
+        acc = torch.sum(torch.eq(resize_pred, gt).float()) / (h * w)
+        self.acc_list.append(acc.item())
+
+    def compute(self):
+        acc = sum(self.acc_list) / len(self.acc_list)
+        return acc
+
+    def __str__(self):
+        acc = self.compute()
+        return f'Acc: {acc:.5f}'
+
+
+# 计算敏感性
+class Sensitivity:
+    def __init__(self):
+        # 初始化两个计数器
+        self.tp = 0  # 真正例
+        self.fn = 0  # 假反例
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        # 更新计数器，假设pred和gt都是形状为（1，1，512，512）的张量
+        assert pred.shape == gt.shape
+        # 创建新的张量来转换为二值张量
+        pred_clone = pred.clone()
+        gt_clone = gt.clone()
+        self.tp += torch.sum((pred_clone < 0) & (gt_clone < 0)).item()
+        self.fn += torch.sum((pred_clone < 0) & (gt_clone >= 0)).item()
+
+    def compute(self):
+        # 计算敏感度Sen，注意分母可能为零的情况
+        sen = self.tp / (self.tp + self.fn) if self.tp + self.fn > 0 else 0.0
+        return sen
+
+    def __str__(self):
+        sen = self.compute()
+        return f'Sensitivity: {sen:.5f}, TP: {self.tp}, FN: {self.fn}'
+
+
+class RMSE:
+    def __init__(self):
+        # 初始化一个MSELoss对象
+        self.rmse_loss = None
+        self.mse_loss = []
+        self.mse = nn.MSELoss()
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        # 计算MSE
+        self.mse_loss.append(self.mse(pred, gt))
+
+    def compute(self):
+        mean_mes = sum(self.mse_loss) / len(self.mse_loss)
+        # 计算RMSE，注意开根号可能出现NaN的情况
+        self.rmse_loss = torch.sqrt(mean_mes) if mean_mes > 0 else 0.0
+        return self.rmse_loss
+
+    def __str__(self):
+        rmse = self.compute()
+        return f'RMSE: {rmse:.5f}'
+
+
+class Specificity:
+    def __init__(self):
+        # 初始化两个计数器
+        self.tn = 0 # 真负例
+        self.fp = 0 # 假正例
+
+    def update(self, pred: torch.Tensor, gt: torch.Tensor):
+        # 更新计数器，假设pred和gt都是形状为（1，1，512，512）的张量
+        assert pred.shape == gt.shape
+        # 创建新的张量来转换为二值张量
+        pred_bin = pred.clone()
+        gt_bin = gt.clone()
+        self.tn += torch.sum((pred_bin >= 0) & (gt_bin >= 0)).item()
+        self.fp += torch.sum((pred_bin < 0) & (gt_bin >= 0)).item()
+
+    def compute(self):
+        # 计算特异性Specificity，注意分母可能为零的情况
+        specificity = self.tn / (self.tn + self.fp) if self.tn + self.fp > 0 else 0.0
+        return specificity
+
+    def __str__(self):
+        specificity = self.compute()
+        return f'Specificity: {specificity:.5f}, TN: {self.tn}, FP: {self.fp}'

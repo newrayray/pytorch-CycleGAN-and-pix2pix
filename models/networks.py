@@ -11,6 +11,8 @@ import collections.abc as container_abcs
 import warnings
 from models.SUNet import SUNet_model
 import torchvision.models as models
+
+from models.u2net_aspp import U2netLiteAsppGenerator
 from models.u2net_cbam import U2netLiteCbam2Generator
 from models.cbam import CBAM
 
@@ -182,6 +184,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = U2netLiteCbamGenerator(input_nc, output_nc, norm_layer=norm_layer)
     elif netG == 'u2net_lite_cbam2':
         net = U2netLiteCbam2Generator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite_aspp':
+        net = U2netLiteAsppGenerator(input_nc, output_nc, norm_layer=norm_layer)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
