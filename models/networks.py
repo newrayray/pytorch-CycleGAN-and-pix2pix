@@ -66,6 +66,7 @@ def get_scheduler(optimizer, opt):
         def lambda_rule(epoch):
             lr_l = 1.0 - max(0, epoch + opt.epoch_count - opt.n_epochs) / float(opt.n_epochs_decay + 1)
             return lr_l
+
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     elif opt.lr_policy == 'step':
         scheduler = lr_scheduler.StepLR(optimizer, step_size=opt.lr_decay_iters, gamma=0.1)
@@ -89,6 +90,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     We use 'normal' in the original pix2pix and CycleGAN paper. But xavier and kaiming might
     work better for some applications. Feel free to try yourself.
     """
+
     def init_func(m):  # define the initialization function
         classname = m.__class__.__name__
         if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
@@ -104,7 +106,8 @@ def init_weights(net, init_type='normal', init_gain=0.02):
                 raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
             if hasattr(m, 'bias') and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
-        elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
+        elif classname.find(
+                'BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 
@@ -123,14 +126,15 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     Return an initialized network.
     """
     if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
+        assert (torch.cuda.is_available())
         net.to(gpu_ids[0])
         net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs
     init_weights(net, init_type, init_gain=init_gain)
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02,
+             gpu_ids=[]):
     """Create a generator
 
     Parameters:
@@ -176,6 +180,12 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = U2netFullGenerator(input_nc, output_nc, norm_layer=norm_layer)
     elif netG == 'u2net_lite':
         net = U2netLiteGenerator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite3':
+        net = U2netLite3Generator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite4':
+        net = U2netLite4Generator(input_nc, output_nc, norm_layer=norm_layer)
+    elif netG == 'u2net_lite5':
+        net = U2netLite5Generator(input_nc, output_nc, norm_layer=norm_layer)
     elif netG == 'vit':
         net = ViT_seg(img_size=512, embed_dim=1024, depth=24, num_heads=16, num_classes=3, mlp_ratio=4.)
     elif netG == 'sunet':
@@ -232,7 +242,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         net = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer)
     elif netD == 'n_layers':  # more options
         net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer)
-    elif netD == 'pixel':     # classify if each pixel is real or fake
+    elif netD == 'pixel':  # classify if each pixel is real or fake
         net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
@@ -324,19 +334,23 @@ class GradientLoss(nn.Module):
         # Compute the gradient of the input and target images
         input_grad_x = torch.abs(
             F.conv2d(input,
-                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float,
+                                  device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
                      padding=1))
         input_grad_y = torch.abs(
             F.conv2d(input,
-                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float,
+                                  device=self.device).unsqueeze(0).repeat(input.shape[1], 1, 1, 1),
                      padding=1))
         target_grad_x = torch.abs(
             F.conv2d(target,
-                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float,
+                                  device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
                      padding=1))
         target_grad_y = torch.abs(
             F.conv2d(target,
-                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float, device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
+                     torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float,
+                                  device=self.device).unsqueeze(0).repeat(target.shape[1], 1, 1, 1),
                      padding=1))
 
         # Compute the L1 loss between the input and target gradients
@@ -362,6 +376,7 @@ class PerceptualLoss(nn.Module):
         loss = torch.mean(torch.abs(input_vgg - target_vgg))
         return loss
 
+
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
 
@@ -377,13 +392,14 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
     Returns the gradient penalty loss
     """
     if lambda_gp > 0.0:
-        if type == 'real':   # either use real images, fake images, or a linear interpolation of two.
+        if type == 'real':  # either use real images, fake images, or a linear interpolation of two.
             interpolatesv = real_data
         elif type == 'fake':
             interpolatesv = fake_data
         elif type == 'mixed':
             alpha = torch.rand(real_data.shape[0], 1, device=device)
-            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(
+                *real_data.shape)
             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
         else:
             raise NotImplementedError('{} not implemented'.format(type))
@@ -393,7 +409,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
                                         grad_outputs=torch.ones(disc_interpolates.size()).to(device),
                                         create_graph=True, retain_graph=True, only_inputs=True)
         gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp  # added eps
         return gradient_penalty, gradients
     else:
         return 0.0, None
@@ -405,7 +421,8 @@ class ResnetGenerator(nn.Module):
     We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
     """
 
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6,
+                 padding_type='reflect'):
         """Construct a Resnet-based generator
 
         Parameters:
@@ -417,7 +434,7 @@ class ResnetGenerator(nn.Module):
             n_blocks (int)      -- the number of ResNet blocks
             padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
         """
-        assert(n_blocks >= 0)
+        assert (n_blocks >= 0)
         super(ResnetGenerator, self).__init__()
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -437,9 +454,10 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
 
         mult = 2 ** n_downsampling
-        for i in range(n_blocks):       # add ResNet blocks
+        for i in range(n_blocks):  # add ResNet blocks
 
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout,
+                                  use_bias=use_bias)]
 
         for i in range(n_downsampling):  # add upsampling layers
             mult = 2 ** (n_downsampling - i)
@@ -538,14 +556,19 @@ class UnetGenerator(nn.Module):
         """
         super(UnetGenerator, self).__init__()
         # construct unet structure
-        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
-        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
-            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
+        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer,
+                                             innermost=True)  # add the innermost layer
+        for i in range(num_downs - 5):  # add intermediate layers with ngf * 8 filters
+            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block,
+                                                 norm_layer=norm_layer, use_dropout=use_dropout)
         # gradually reduce the number of filters from ngf * 8 to ngf
-        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block,
+                                             norm_layer=norm_layer)
+        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block,
+                                             norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
-        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
+        self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True,
+                                             norm_layer=norm_layer)  # add the outermost layer
 
     def forward(self, input):
         """Standard forward"""
@@ -618,7 +641,7 @@ class UnetSkipConnectionBlock(nn.Module):
     def forward(self, x):
         if self.outermost:
             return self.model(x)
-        else:   # add skip connections
+        else:  # add skip connections
             return torch.cat([x, self.model(x)], 1)
 
 
@@ -662,7 +685,8 @@ class NLayerDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, True)
         ]
 
-        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+        sequence += [
+            nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
         self.model = nn.Sequential(*sequence)
 
     def forward(self, input):
@@ -701,6 +725,7 @@ class PixelDiscriminator(nn.Module):
         """Standard forward."""
         return self.net(input)
 
+
 class U2netGenerator(nn.Module):
     """Create a Unet-based generator"""
 
@@ -717,6 +742,7 @@ class U2netGenerator(nn.Module):
     def forward(self, input):
         """Standard forward"""
         return self.model(input)
+
 
 class U2netFullGenerator(nn.Module):
     """Create a Unet-based generator"""
@@ -735,6 +761,7 @@ class U2netFullGenerator(nn.Module):
         """Standard forward"""
         return self.model(input)
 
+
 class U2netLiteGenerator(nn.Module):
     """Create a Unet-based generator"""
 
@@ -751,6 +778,61 @@ class U2netLiteGenerator(nn.Module):
     def forward(self, input):
         """Standard forward"""
         return self.model(input)
+
+
+class U2netLite3Generator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netLiteGenerator, self).__init__()
+        self.model = u2net_lite3(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+
+class U2netLite4Generator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netLiteGenerator, self).__init__()
+        self.model = u2net_lite4(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+
+class U2netLite5Generator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+        """Construct a U2net generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            norm_layer      -- normalization layer
+        """
+        super(U2netLiteGenerator, self).__init__()
+        self.model = u2net_lite5(input_nc, output_nc, norm_layer)
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
 
 class U2netLiteCbamGenerator(nn.Module):
     """Create a Unet-based generator"""
@@ -769,8 +851,10 @@ class U2netLiteCbamGenerator(nn.Module):
         """Standard forward"""
         return self.model(input)
 
+
 class ConvBNReLU(nn.Module):
-    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, norm_layer=nn.BatchNorm2d):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1,
+                 norm_layer=nn.BatchNorm2d):
         super().__init__()
 
         if type(norm_layer) == functools.partial:
@@ -787,7 +871,8 @@ class ConvBNReLU(nn.Module):
 
 
 class DownConvBNReLU(ConvBNReLU):
-    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True, norm_layer=nn.BatchNorm2d):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True,
+                 norm_layer=nn.BatchNorm2d):
         super().__init__(input_nc, output_nc, kernel_size, dilation, norm_layer=norm_layer)
         self.down_flag = flag
 
@@ -799,7 +884,8 @@ class DownConvBNReLU(ConvBNReLU):
 
 
 class UpConvBNReLU(ConvBNReLU):
-    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True, norm_layer=nn.BatchNorm2d):
+    def __init__(self, input_nc: int, output_nc: int, kernel_size: int = 3, dilation: int = 1, flag: bool = True,
+                 norm_layer=nn.BatchNorm2d):
         super().__init__(input_nc, output_nc, kernel_size, dilation, norm_layer=norm_layer)
         self.up_flag = flag
 
@@ -842,6 +928,7 @@ class RSU(nn.Module):
 
         return x + x_in
 
+
 class RSU4F(nn.Module):
     def __init__(self, input_nc: int, mid_ch: int, output_nc: int, norm_layer=nn.BatchNorm2d):
         super().__init__()
@@ -871,6 +958,7 @@ class RSU4F(nn.Module):
 
         return x + x_in
 
+
 class U2Net(nn.Module):
     def __init__(self, cfg: dict, output_nc: int, norm_layer=nn.BatchNorm2d):
         super().__init__()
@@ -883,7 +971,8 @@ class U2Net(nn.Module):
         for c in cfg["encode"]:
             # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
             assert len(c) == 6
-            encode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+            encode_list.append(
+                RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
 
             if c[5] is True:
                 side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
@@ -893,7 +982,8 @@ class U2Net(nn.Module):
         for c in cfg["decode"]:
             # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
             assert len(c) == 6
-            decode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+            decode_list.append(
+                RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
 
             if c[5] is True:
                 side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
@@ -938,6 +1028,7 @@ class U2Net(nn.Module):
         tanh = nn.Tanh()
         return tanh(x)
 
+
 class U2Net_cbam(nn.Module):
     def __init__(self, cfg: dict, output_nc: int, norm_layer=nn.BatchNorm2d):
         super().__init__()
@@ -951,7 +1042,8 @@ class U2Net_cbam(nn.Module):
         for c in cfg["encode"]:
             # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
             assert len(c) == 6
-            encode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+            encode_list.append(
+                RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
             cbam_list.append(CBAM(c[3]))
 
             if c[5] is True:
@@ -962,7 +1054,8 @@ class U2Net_cbam(nn.Module):
         for c in cfg["decode"]:
             # c: [height, input_nc, mid_ch, output_nc, RSU4F, side]
             assert len(c) == 6
-            decode_list.append(RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
+            decode_list.append(
+                RSU(*c[:4], norm_layer=norm_layer) if c[4] is False else RSU4F(*c[1:4], norm_layer=norm_layer))
 
             if c[5] is True:
                 side_list.append(nn.Conv2d(c[3], output_nc, kernel_size=3, padding=1))
@@ -1009,21 +1102,22 @@ class U2Net_cbam(nn.Module):
         tanh = nn.Tanh()
         return tanh(x)
 
+
 def u2net_full(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
     cfg = {
         # height, input_nc, mid_ch, output_nc, RSU4F, side
-        "encode": [[7, input_nc, 32, 64, False, False],      # En1
-                   [6, 64, 32, 128, False, False],    # En2
-                   [5, 128, 64, 256, False, False],   # En3
+        "encode": [[7, input_nc, 32, 64, False, False],  # En1
+                   [6, 64, 32, 128, False, False],  # En2
+                   [5, 128, 64, 256, False, False],  # En3
                    [4, 256, 128, 512, False, False],  # En4
-                   [4, 512, 256, 512, True, False],   # En5
-                   [4, 512, 256, 512, True, True]],   # En6
+                   [4, 512, 256, 512, True, False],  # En5
+                   [4, 512, 256, 512, True, True]],  # En6
         # height, input_nc, mid_ch, output_nc, RSU4F, side
-        "decode": [[4, 1024, 256, 512, True, True],   # De5
+        "decode": [[4, 1024, 256, 512, True, True],  # De5
                    [4, 1024, 128, 256, False, True],  # De4
-                   [5, 512, 64, 128, False, True],    # De3
-                   [6, 256, 32, 64, False, True],     # De2
-                   [7, 128, 16, 64, False, True]]     # De1
+                   [5, 512, 64, 128, False, True],  # De3
+                   [6, 256, 32, 64, False, True],  # De2
+                   [7, 128, 16, 64, False, True]]  # De1
     }
 
     return U2Net(cfg, output_nc, norm_layer)
@@ -1044,6 +1138,55 @@ def u2net_lite(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
                    [5, 128, 16, 64, False, True],  # De3
                    [6, 128, 16, 64, False, True],  # De2
                    [7, 128, 16, 64, False, True]]  # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
+
+
+def u2net_lite3(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [[4, input_nc, 16, 64, False, False],  # En4
+                   [4, 64, 16, 64, True, False],  # En5
+                   [4, 64, 16, 64, True, True]],  # En6
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 128, 16, 64, True, True],  # De5
+                   [4, 128, 16, 64, False, True]]  # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
+
+
+def u2net_lite4(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [
+                   [5, input_nc, 16, 64, False, False],  # En3
+                   [4, 64, 16, 64, False, False],  # En4
+                   [4, 64, 16, 64, True, False],  # En5
+                   [4, 64, 16, 64, True, True]],  # En6
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 128, 16, 64, True, True],  # De5
+                   [4, 128, 16, 64, False, True],  # De4
+                   [5, 128, 16, 64, False, True]]  # De1
+    }
+
+    return U2Net(cfg, output_nc, norm_layer)
+
+
+def u2net_lite5(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
+    cfg = {
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "encode": [[6, input_nc, 16, 64, False, False],  # En1
+                   [5, 64, 16, 64, False, False],  # En2
+                   [4, 64, 16, 64, False, False],  # En3
+                   [4, 64, 16, 64, True, False],  # En4
+                   [4, 64, 16, 64, True, True]],  # En5
+        # height, input_nc, mid_ch, output_nc, RSU4F, side
+        "decode": [[4, 128, 16, 64, True, True],  # De4
+                   [4, 128, 16, 64, False, True],  # De3
+                   [5, 128, 16, 64, False, True],  # De2
+                   [6, 128, 16, 64, False, True]],  # De1
     }
 
     return U2Net(cfg, output_nc, norm_layer)
@@ -1086,11 +1229,13 @@ def u2net_lite_cbam(input_nc: int, output_nc: int, norm_layer=nn.BatchNorm2d):
 
     return U2Net_cbam(cfg, output_nc, norm_layer)
 
+
 # helpers
 def to_2tuple(x):
     if isinstance(x, container_abcs.Iterable):
         return x
     return tuple(repeat(x, 2))
+
 
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
@@ -1107,10 +1252,11 @@ class DropPath(nn.Module):
         # work with diff dim tensors, not just 2D ConvNets
         shape = (x.shape[0],) + (1,) * (x.ndim - 1)
         random_tensor = keep_prob + \
-            torch.rand(shape, dtype=x.dtype, device=x.device)
+                        torch.rand(shape, dtype=x.dtype, device=x.device)
         random_tensor.floor_()  # binarize
         output = x.div(keep_prob) * random_tensor
         return output
+
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
@@ -1147,6 +1293,7 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
         tensor.clamp_(min=a, max=b)
         return tensor
 
+
 def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     # type: (Tensor, float, float, float, float) -> Tensor
     r"""Fills the input Tensor with values drawn from a truncated
@@ -1166,7 +1313,6 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
         >>> nn.init.trunc_normal_(w)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
-
 
 
 # MLP
@@ -1251,7 +1397,7 @@ class PatchEmbed(nn.Module):
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
         num_patches = (img_size[1] // patch_size[1]) * \
-            (img_size[0] // patch_size[0])
+                      (img_size[0] // patch_size[0])
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = num_patches
@@ -1275,7 +1421,8 @@ class VisionTransformer(nn.Module):
     """
 
     def __init__(self, img_size=512, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
-                 num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
+                 num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1,
+                 attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs):
         super(VisionTransformer, self).__init__(**kwargs)
         self.img_size = img_size
@@ -1298,7 +1445,7 @@ class VisionTransformer(nn.Module):
 
         # embedding
         self.patch_embed = PatchEmbed(
-        img_size=self.img_size, patch_size=self.patch_size, in_chans=self.in_chans, embed_dim=self.embed_dim)
+            img_size=self.img_size, patch_size=self.patch_size, in_chans=self.in_chans, embed_dim=self.embed_dim)
 
         self.num_patches = self.patch_embed.num_patches
 
@@ -1311,7 +1458,8 @@ class VisionTransformer(nn.Module):
                                                 self.depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             Block(
-                dim=self.embed_dim, num_heads=self.num_heads, mlp_ratio=self.mlp_ratio, qkv_bias=self.qkv_bias, qk_scale=self.qk_scale,
+                dim=self.embed_dim, num_heads=self.num_heads, mlp_ratio=self.mlp_ratio, qkv_bias=self.qkv_bias,
+                qk_scale=self.qk_scale,
                 drop=self.drop_rate, attn_drop=self.attn_drop_rate, drop_path=dpr[i], norm_layer=self.norm_layer)
             for i in range(self.depth)])
 
@@ -1384,7 +1532,6 @@ class Decoder(nn.Module):
             256, 256, kernel_size=3, stride=1, padding=1)
         self.conv_4 = nn.Conv2d(256, num_classes, kernel_size=1, stride=1)
 
-
         self.syncbn_fc_0 = nn.BatchNorm2d(256)
         self.syncbn_fc_1 = nn.BatchNorm2d(256)
         self.syncbn_fc_2 = nn.BatchNorm2d(256)
@@ -1395,37 +1542,36 @@ class Decoder(nn.Module):
 
         n, hw, c = x.shape
         h = w = int(math.sqrt(hw))
-        x = x.transpose(1, 2)[...,:-1].reshape(n, c, h, w)
-
+        x = x.transpose(1, 2)[..., :-1].reshape(n, c, h, w)
 
         x = self.conv_0(x)
         x = self.syncbn_fc_0(x)
         x = F.relu(x, inplace=True)
         x = F.interpolate(
-            x, size=x.shape[-1]*2, mode='bilinear', align_corners=self.align_corners)
+            x, size=x.shape[-1] * 2, mode='bilinear', align_corners=self.align_corners)
         x = self.conv_1(x)
         x = self.syncbn_fc_1(x)
         x = F.relu(x, inplace=True)
         x = F.interpolate(
-            x, size=x.shape[-1]*2, mode='bilinear', align_corners=self.align_corners)
+            x, size=x.shape[-1] * 2, mode='bilinear', align_corners=self.align_corners)
         x = self.conv_2(x)
         x = self.syncbn_fc_2(x)
         x = F.relu(x, inplace=True)
         x = F.interpolate(
-            x, size=x.shape[-1]*2, mode='bilinear', align_corners=self.align_corners)
+            x, size=x.shape[-1] * 2, mode='bilinear', align_corners=self.align_corners)
         x = self.conv_3(x)
         x = self.syncbn_fc_3(x)
         x = F.relu(x, inplace=True)
         x = self.conv_4(x)
         x = F.interpolate(
-            x, size=x.shape[-1]*2, mode='bilinear', align_corners=self.align_corners)
+            x, size=x.shape[-1] * 2, mode='bilinear', align_corners=self.align_corners)
 
         return x
 
 
 class ViT_seg(nn.Module):
     def __init__(self, img_size=512, embed_dim=1024, depth=24, num_heads=16, num_classes=20,
-                mlp_ratio=4., **kwargs):
+                 mlp_ratio=4., **kwargs):
         super(ViT_seg, self).__init__(**kwargs)
         self.transformer = VisionTransformer(
             img_size=img_size, patch_size=16, in_chans=3, embed_dim=embed_dim, depth=depth,
