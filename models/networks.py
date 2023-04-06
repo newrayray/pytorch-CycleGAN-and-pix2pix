@@ -790,7 +790,7 @@ class U2netLite3Generator(nn.Module):
             output_nc (int) -- the number of channels in output images
             norm_layer      -- normalization layer
         """
-        super(U2netLiteGenerator, self).__init__()
+        super(U2netLite3Generator, self).__init__()
         self.model = u2net_lite3(input_nc, output_nc, norm_layer)
 
     def forward(self, input):
@@ -808,7 +808,7 @@ class U2netLite4Generator(nn.Module):
             output_nc (int) -- the number of channels in output images
             norm_layer      -- normalization layer
         """
-        super(U2netLiteGenerator, self).__init__()
+        super(U2netLite4Generator, self).__init__()
         self.model = u2net_lite4(input_nc, output_nc, norm_layer)
 
     def forward(self, input):
@@ -826,7 +826,7 @@ class U2netLite5Generator(nn.Module):
             output_nc (int) -- the number of channels in output images
             norm_layer      -- normalization layer
         """
-        super(U2netLiteGenerator, self).__init__()
+        super(U2netLite5Generator, self).__init__()
         self.model = u2net_lite5(input_nc, output_nc, norm_layer)
 
     def forward(self, input):
